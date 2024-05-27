@@ -31,7 +31,7 @@ builder.Services.AddCulturesExtension();
 ```
 App in ``Program.cs``
 ```cs
-app.CultureMiddleware();
+app.UseCulturesExtension();
 ```
 
 ### Example usage:
