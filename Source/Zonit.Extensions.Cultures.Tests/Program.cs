@@ -1,17 +1,26 @@
-﻿using Zonit.Extensions.Cultures;
-using Zonit.Extensions.Cultures.Services;
+﻿using Microsoft.Extensions.DependencyInjection;
 
-namespace Zonit.Extensions.Cultures.Tests
+namespace Zonit.Extensions.Cultures.Tests;
+internal class Program
 {
-    internal class Program
+    static void Main(string[] args)
     {
-        static void Main(string[] args)
+        var serviceProvider = new ServiceCollection()
+            .AddCulturesExtension()
+            .BuildServiceProvider();
+
+        var cultureManager = serviceProvider.GetService<ICultureManager>();
+
+        if (cultureManager is null)
+            return;
+
+        cultureManager.SetCulture("en-us");
+
+        var supportedCultures = cultureManager.SupportedCultures;
+
+        foreach (var culture in supportedCultures)
         {
-            Console.WriteLine("Hello, World!");
-
-            var languageProvider = new LanguageService();
-
-            Console.WriteLine(languageProvider.GetByCode("pl-pl").IconFlag);
+            Console.WriteLine(culture.EnglishName);
         }
     }
 }

@@ -27,6 +27,8 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICultureManager, CultureRepository>();
         services.AddScoped<ICultureProvider, CultureService>();
 
+        services.AddTransient<ILanguageProvider, LanguageService>();
+
         return services;
     }
 }

@@ -2,7 +2,7 @@
 
 namespace Zonit.Extensions.Cultures.Repositories;
 
-internal class CultureRepository : ICultureManager
+internal class CultureRepository(ILanguageProvider languageProvider) : ICultureManager
 {
     string _culture = "en-US";
     string _getTimeZone = "Europe/Warsaw";
@@ -26,19 +26,27 @@ internal class CultureRepository : ICultureManager
         "pt-pt"
         ];
 
+    List<LanguageModel> _supportedCulturesModel { get; set; } = [];
+
     public string GetCulture => _culture;
 
     public string GetTimeZone => _getTimeZone;
 
-    // TODO: Jest to zła implementacja, jest to SCOPE a powinno być SINGLETON. Język raczej nie będzie tylko dla konkretnego użytkownika lecz dla całej aplikacji
+    // FIXME: Jest to zła implementacja, jest to SCOPE a powinno być SINGLETON. Język raczej nie będzie tylko dla konkretnego użytkownika lecz dla całej aplikacji
     // Myślę że można zrobić nową klasę która będzie zajmowała się ogólnymi ustawieniami dla całej aplikacji
-    public string[] SupportedCultures => _supportedCultures;
+    public LanguageModel[] SupportedCultures => _supportedCulturesModel.ToArray();
 
     public void SetCulture(string culture)
     {
         var cultureInfo = new CultureInfo(culture);
 
         _culture = CultureInfo.CreateSpecificCulture(cultureInfo.Name).Name.ToLower();
+
+        for(int i = 0; i < _supportedCultures.Length; i++)
+        {
+            var lang = languageProvider.GetByCode(_supportedCultures[i]);
+            _supportedCulturesModel.Add(lang);
+        }
 
         CultureInfo.CurrentCulture = cultureInfo;
         CultureInfo.CurrentUICulture = cultureInfo;

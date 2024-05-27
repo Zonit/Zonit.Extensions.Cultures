@@ -41,6 +41,7 @@ public class LanguageService : ILanguageProvider
         }
         else
         {
+            // FIXME: Dodaj tutaj loggera Error
             throw new ArgumentException($"Language with name '{name}' not found.");
         }
     }

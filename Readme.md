@@ -104,7 +104,7 @@ public interface ICultureManager
     /// <summary>
     /// Get list of supported cultures
     /// </summary>
-    public string[] SupportedCultures { get; }
+    public LanguageModel[] SupportedCultures { get; }
 
     /// <summary>
     /// Changing the default language
