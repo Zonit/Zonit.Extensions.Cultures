@@ -1,5 +1,8 @@
 ﻿namespace Zonit.Extensions.Cultures;
 
+/// <summary>
+/// Manager to manage the state of culture 
+/// </summary>
 public interface ICultureManager
 {
     /// <summary>

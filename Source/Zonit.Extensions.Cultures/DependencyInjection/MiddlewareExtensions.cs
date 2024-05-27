@@ -5,7 +5,7 @@ namespace Zonit.Extensions;
 
 public static class MiddlewareExtensions
 {
-    public static IApplicationBuilder UseCultureExtension(this IApplicationBuilder builder)
+    public static IApplicationBuilder UseCulturesExtension(this IApplicationBuilder builder)
     {
         builder.UseMiddleware<CultureMiddleware>();
 

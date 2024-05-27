@@ -2,6 +2,9 @@
 
 namespace Zonit.Extensions.Cultures;
 
+/// <summary>
+/// Provider to display the finished translation
+/// </summary>
 public interface ICultureProvider
 {
     /// <summary>
