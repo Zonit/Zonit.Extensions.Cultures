@@ -6,11 +6,16 @@ Advanced language support for Blazor.
 ```
 Install-Package Zonit.Extensions.Cultures.Abstractions 
 ```
+![NuGet Version](https://img.shields.io/nuget/v/Zonit.Extensions.Cultures.Abstractions.svg)
+![NuGet](https://img.shields.io/nuget/dt/Zonit.Extensions.Cultures.Abstractions.svg)
+
 
 **Nuget Package Extensions**
 ```
 Install-Package Zonit.Extensions.Cultures
 ```
+![NuGet Version](https://img.shields.io/nuget/v/Zonit.Extensions.Cultures.svg)
+![NuGet](https://img.shields.io/nuget/dt/Zonit.Extensions.Cultures.svg)
 
 **Install**
 Add this in ``Routes.razor``
