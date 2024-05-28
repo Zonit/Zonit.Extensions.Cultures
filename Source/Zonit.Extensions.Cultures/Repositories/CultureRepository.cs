@@ -42,7 +42,8 @@ internal class CultureRepository(ILanguageProvider languageProvider) : ICultureM
 
         _culture = CultureInfo.CreateSpecificCulture(cultureInfo.Name).Name.ToLower();
 
-        for(int i = 0; i < _supportedCultures.Length; i++)
+        _supportedCulturesModel = [];
+        for (int i = 0; i < _supportedCultures.Length; i++)
         {
             var lang = languageProvider.GetByCode(_supportedCultures[i]);
             _supportedCulturesModel.Add(lang);
