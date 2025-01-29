@@ -1,9 +1,10 @@
 <Project>
   <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
+	  <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+	  <TargetFrameworks>net8.0;net9.0</TargetFrameworks>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <AssemblyVersion>0.1.1</AssemblyVersion>
+    <AssemblyVersion>0.1.2</AssemblyVersion>
     <FileVersion>$(AssemblyVersion)</FileVersion>
     <Version>$(AssemblyVersion)</Version>
     <Authors>Zonit</Authors>
@@ -12,9 +13,20 @@
     <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
     <PackageProjectUrl>https://github.com/Zonit</PackageProjectUrl>
     <RepositoryUrl>https://github.com/Zonit/Zonit.Extensions.Cultures</RepositoryUrl>
+
+	  <!-- Debugging symbol settings -->
+	  <IncludeSymbols>true</IncludeSymbols>
+	  <IncludeSource>true</IncludeSource>
+	  <SymbolPackageFormat>snupkg</SymbolPackageFormat>
   </PropertyGroup>
-  <ItemGroup>
-	  <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.1" />
-	  <PackageVersion Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
-  </ItemGroup>
+	
+	<ItemGroup Condition="'$(TargetFramework)' == 'net8.0'">
+		<PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="8.0.2" />
+		<PackageVersion Include="Microsoft.Extensions.Hosting" Version="8.0.1" />
+	</ItemGroup>
+
+	<ItemGroup Condition="'$(TargetFramework)' == 'net9.0'">
+		<PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="9.0.1" />
+		<PackageVersion Include="Microsoft.Extensions.Hosting" Version="9.0.1" />
+	</ItemGroup>
 </Project>
