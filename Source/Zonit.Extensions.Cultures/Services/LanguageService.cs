@@ -35,14 +35,32 @@ public class LanguageService : ILanguageProvider
 
     public LanguageModel GetByCode(string name)
     {
-        if (languages.TryGetValue(name, out LanguageModel? language))
+        // Najpierw próba bezpośredniego znalezienia kodu języka
+        if (languages.TryGetValue(name.ToLower(), out LanguageModel? language))
         {
             return language;
         }
-        else
+
+        // Próba znalezienia głównego kodu języka (np. "en" dla "en-gb")
+        string mainLanguageCode = name.Split('-')[0].ToLower();
+        var mainLanguage = languages.FirstOrDefault(l => l.Key.StartsWith($"{mainLanguageCode}-"));
+
+        if (mainLanguage.Value != null)
         {
-            // FIXME: Dodaj tutaj loggera Error
-            throw new ArgumentException($"Language with name '{name}' not found.");
+            // Logowanie informacji o użyciu zamiennika
+            // logger?.LogWarning($"Language '{name}' not found, using '{mainLanguage.Key}' instead.");
+            return mainLanguage.Value;
         }
+
+        // Domyślny język (angielski)
+        if (languages.TryGetValue("en-us", out LanguageModel? defaultLanguage))
+        {
+            // Logowanie informacji o użyciu domyślnego języka
+            // logger?.LogWarning($"Language '{name}' not found, using default 'en-us' instead.");
+            return defaultLanguage;
+        }
+
+        // Ostatecznie, jeśli nawet domyślny język nie jest dostępny, rzuć wyjątek
+        throw new ArgumentException($"Language with name '{name}' not found, and default language is not available.");
     }
 }
