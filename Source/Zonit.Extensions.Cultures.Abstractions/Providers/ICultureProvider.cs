@@ -15,10 +15,10 @@ public interface ICultureProvider
     /// <summary>
     /// Returns the translation in the current language used
     /// </summary>
-    /// <param name="content">Search string, example: “Hello {0}”</param>
-    /// <param name="args">Additional arguments, example: “User”</param>
+    /// <param name="content">Search string, example: "Hello {0}"</param>
+    /// <param name="args">Additional arguments, example: "User"</param>
     /// <returns></returns>
-    public string Translate(string content, params object?[] args);
+    public Translated Translate(string content, params object?[] args);
 
     /// <summary>
     /// Default time zone for the user

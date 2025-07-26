@@ -1,4 +1,5 @@
 ﻿using System.Globalization;
+using Zonit.Extensions.Cultures;
 using Zonit.Extensions.Cultures.Models;
 using Zonit.Extensions.Cultures.Repositories;
 
@@ -6,106 +7,205 @@ namespace Zonit.Extensions.Cultures.Services;
 
 public class CultureService : ICultureProvider
 {
-
+    private const string DefaultCulture = "en-us";
+    
     private readonly TranslationRepository _translationRepository;
     private readonly MissingTranslationRepository _missingTranslationRepository;
-    private readonly ICultureManager _cultureRepository;
+    private readonly ICultureManager _cultureManager;
+
+    private DateTimeFormatModel _dateTimeFormat;
 
     public CultureService(
         TranslationRepository translationRepository,
         MissingTranslationRepository missingTranslationRepository,
-        ICultureManager cultureRepository
-    )
+        ICultureManager cultureManager)
     {
-        _translationRepository = translationRepository;
-        _missingTranslationRepository = missingTranslationRepository;
-        _cultureRepository = cultureRepository;
+        _translationRepository = translationRepository ?? throw new ArgumentNullException(nameof(translationRepository));
+        _missingTranslationRepository = missingTranslationRepository ?? throw new ArgumentNullException(nameof(missingTranslationRepository));
+        _cultureManager = cultureManager ?? throw new ArgumentNullException(nameof(cultureManager));
 
-        _cultureRepository.OnChange += HandleCultureRepositoryChange;
-
-        GetCulture = _cultureRepository.GetCulture;
+        _cultureManager.OnChange += HandleCultureManagerChange;
+        
+        UpdateCultureProperties();
     }
 
-    private DateTimeFormatModel _dateTimeFormat = new()
-    {
-        ShortDatePattern = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern,
-        ShortTimePattern = CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern
-    };
-
     public DateTimeFormatModel DateTimeFormat => _dateTimeFormat;
-
-    public string GetCulture { get; private set; }
-
+    public string GetCulture { get; private set; } = DefaultCulture;
     public event Action? OnChange;
 
-    private void HandleCultureRepositoryChange()
+    private void HandleCultureManagerChange()
     {
-        GetCulture = _cultureRepository.GetCulture;
+        UpdateCultureProperties();
+        OnChange?.Invoke();
+    }
 
-        _dateTimeFormat = new()
+    private void UpdateCultureProperties()
+    {
+        GetCulture = NormalizeCultureCode(_cultureManager.GetCulture);
+        
+        _dateTimeFormat = new DateTimeFormatModel
         {
             ShortDatePattern = CultureInfo.CurrentCulture.DateTimeFormat.ShortDatePattern,
             ShortTimePattern = CultureInfo.CurrentCulture.DateTimeFormat.ShortTimePattern
         };
-
-        StateChanged();
     }
 
-    public void StateChanged() => OnChange?.Invoke();
-
-    // Do refaktoru
-    public string Translate(string content, params object?[] args)
+    private static string NormalizeCultureCode(string? culture)
     {
-        var varables = _translationRepository.GetAll().FirstOrDefault(x => x.Name == content);
+        if (string.IsNullOrWhiteSpace(culture))
+            return DefaultCulture;
 
-        // Jeżeli jest tłumaczenie w bazie danych
-        if (varables is not null)
+        try
         {
-            var translates = varables.Translates?.SingleOrDefault(x => x.Culture == GetCulture) ?? null;
+            var cultureInfo = CultureInfo.GetCultureInfo(culture);
+            return cultureInfo.Name.ToLowerInvariant();
+        }
+        catch (CultureNotFoundException)
+        {
+            return DefaultCulture;
+        }
+    }
 
-            // Jeżeli jest wymagany język
-            if (translates is not null)
+    private static bool AreCulturesEqual(string? culture1, string? culture2)
+    {
+        return string.Equals(
+            NormalizeCultureCode(culture1), 
+            NormalizeCultureCode(culture2), 
+            StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsDefaultCulture(string? culture)
+    {
+        return AreCulturesEqual(culture, DefaultCulture);
+    }
+
+    public Translated Translate(string content, params object?[] args)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return Translated.Empty;
+
+        try
+        {
+            var currentCulture = GetCulture;
+            var translation = FindTranslation(content, currentCulture);
+
+            if (translation != null)
             {
-                return args is not null ? string.Format(translates.Content, args) : translates.Content;
+                var translatedText = FormatTranslation(translation.Content, args);
+                return new Translated(translatedText);
             }
-            else // Developer code, TODO: do not use in production
-            {
-                // Jeżeli jest zmienna ale brak jej tłumaczenia
-                var missing = _missingTranslationRepository.GetAll().FirstOrDefault(x =>
-                    x.Name == content &&
-                    
-                        x.Translates is not null &&
-                        x.Translates.Any(t => t.Culture == GetCulture) is false
-                    
-                );
 
-                if (missing is not null && GetCulture != "en-us")
+            // Fallback to default culture if not found
+            if (!IsDefaultCulture(currentCulture))
+            {
+                var defaultTranslation = FindTranslation(content, DefaultCulture);
+                if (defaultTranslation != null)
                 {
-                    // Jeżeli istnieje zmienna a nie ma języka to dodaje informację jakiego języka brakuje
-                    missing.Translates?.Add(new() { Content = "", Culture = GetCulture });
+                    var translatedText = FormatTranslation(defaultTranslation.Content, args);
+                    return new Translated(translatedText);
                 }
-                else
+            }
+
+            // Record missing translation for development purposes
+            RecordMissingTranslation(content, currentCulture);
+
+            // Return original content as fallback
+            var fallbackText = FormatTranslation(content, args);
+            return new Translated(fallbackText);
+        }
+        catch (Exception)
+        {
+            // Log exception in production, for now return fallback
+            var fallbackText = FormatTranslation(content, args);
+            return new Translated(fallbackText);
+        }
+    }
+
+    private Translate? FindTranslation(string content, string culture)
+    {
+        var variable = _translationRepository.GetAll()
+            .FirstOrDefault(x => string.Equals(x.Name, content, StringComparison.Ordinal));
+
+        return variable?.Translates?
+            .FirstOrDefault(t => AreCulturesEqual(t.Culture, culture));
+    }
+
+    private static string FormatTranslation(string content, params object?[] args)
+    {
+        if (args == null || args.Length == 0)
+            return content;
+
+        try
+        {
+            return string.Format(content, args);
+        }
+        catch (FormatException)
+        {
+            // If formatting fails, return the original content
+            return content;
+        }
+    }
+
+    private void RecordMissingTranslation(string content, string culture)
+    {
+        // Skip recording for default culture to avoid noise
+        if (IsDefaultCulture(culture))
+            return;
+
+        try
+        {
+            var existingMissing = _missingTranslationRepository.GetAll()
+                .FirstOrDefault(x => string.Equals(x.Name, content, StringComparison.Ordinal));
+
+            if (existingMissing != null)
+            {
+                // Add missing culture if not already recorded
+                var existingTranslate = existingMissing.GetTranslate(culture);
+                if (existingTranslate == null)
                 {
-                    // Zapobiega przypadkowi gdzie jest już zmienna ale nie ma tłumaczenia, pokazywało się że nie ma również zmiennej 
-                    if (_missingTranslationRepository.GetAll().Any(x => x.Name == content) is false && GetCulture != "en-us")
-                        _missingTranslationRepository.Add(new(content, [ new() { Content = "", Culture = GetCulture } ]));
+                    var newTranslate = new Translate 
+                    { 
+                        Content = string.Empty, 
+                        Culture = culture 
+                    };
+                    existingMissing.AddTranslate(newTranslate);
                 }
+            }
+            else
+            {
+                // Create new missing translation record
+                var newTranslate = new Translate 
+                { 
+                    Content = string.Empty, 
+                    Culture = culture 
+                };
+                var missingVariable = new Variable(content, new List<Translate> { newTranslate });
+                
+                _missingTranslationRepository.Add(missingVariable);
             }
         }
-        else // Developer code, TODO: do not use in production
+        catch (Exception)
         {
-            // Jeżeli nie ma zmiennej w bazie danych oraz w liście braku tłumaczenia
-            if (_missingTranslationRepository.GetAll().Any(x => x.Name == content) is false)
-                _missingTranslationRepository.Add(new(content, [ new() { Content = "", Culture = "no varable" } ]));
+            // Log exception in production, but don't fail the translation
         }
-
-        return args is not null ? string.Format(content, args) : content;
     }
 
     public DateTime ClientTimeZone(DateTime utcDateTime)
     {
-        var timeZone = TimeZoneInfo.FindSystemTimeZoneById(_cultureRepository.GetTimeZone);
+        try
+        {
+            var timeZoneId = _cultureManager.GetTimeZone;
+            if (string.IsNullOrWhiteSpace(timeZoneId))
+                return utcDateTime;
 
-        return TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, timeZone);
+            var timeZone = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
+            return TimeZoneInfo.ConvertTimeFromUtc(utcDateTime, timeZone);
+        }
+        catch (Exception)
+        {
+            // Log exception in production
+            // Return UTC time as fallback
+            return utcDateTime;
+        }
     }
 }

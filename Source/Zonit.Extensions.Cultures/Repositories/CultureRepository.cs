@@ -4,9 +4,13 @@ namespace Zonit.Extensions.Cultures.Repositories;
 
 internal class CultureRepository(ILanguageProvider languageProvider) : ICultureManager
 {
-    string _culture = "en-US";
-    string _getTimeZone = "Europe/Warsaw";
-    string[] _supportedCultures = [
+    private const string DefaultCulture = "en-us";
+    private const string DefaultTimeZone = "Europe/Warsaw";
+    
+    private string _culture = DefaultCulture;
+    private string _timeZone = DefaultTimeZone;
+    
+    private readonly string[] _supportedCultures = [
         "en-us",
         "ar-sa",
         "fr-fr",
@@ -24,50 +28,117 @@ internal class CultureRepository(ILanguageProvider languageProvider) : ICultureM
         "hu-hu",
         "sk-sk",
         "pt-pt"
-        ];
+    ];
 
-    List<LanguageModel> _supportedCulturesModel { get; set; } = [];
+    private List<LanguageModel> _supportedCulturesModel = [];
 
     public string GetCulture => _culture;
-
-    public string GetTimeZone => _getTimeZone;
-
-    // FIXME: Jest to zła implementacja, jest to SCOPE a powinno być SINGLETON. Język raczej nie będzie tylko dla konkretnego użytkownika lecz dla całej aplikacji
-    // Myślę że można zrobić nową klasę która będzie zajmowała się ogólnymi ustawieniami dla całej aplikacji
+    public string GetTimeZone => _timeZone;
     public LanguageModel[] SupportedCultures => _supportedCulturesModel.ToArray();
+    public event Action? OnChange;
+
+    private static string NormalizeCultureCode(string culture)
+    {
+        if (string.IsNullOrWhiteSpace(culture))
+            return DefaultCulture;
+
+        try
+        {
+            var cultureInfo = CultureInfo.GetCultureInfo(culture);
+            return cultureInfo.Name.ToLowerInvariant();
+        }
+        catch (CultureNotFoundException)
+        {
+            return DefaultCulture;
+        }
+    }
 
     public void SetCulture(string culture)
     {
-        var cultureInfo = new CultureInfo(culture);
-
-        _culture = CultureInfo.CreateSpecificCulture(cultureInfo.Name).Name.ToLower();
-
-        _supportedCulturesModel = [];
-        for (int i = 0; i < _supportedCultures.Length; i++)
+        if (string.IsNullOrWhiteSpace(culture))
         {
-            var lang = languageProvider.GetByCode(_supportedCultures[i]);
-            _supportedCulturesModel.Add(lang);
+            culture = DefaultCulture;
         }
 
-        CultureInfo.CurrentCulture = cultureInfo;
-        CultureInfo.CurrentUICulture = cultureInfo;
-        //CultureInfo.DefaultThreadCurrentCulture = cultureInfo;
-        //CultureInfo.DefaultThreadCurrentUICulture = cultureInfo;
+        try
+        {
+            var normalizedCulture = NormalizeCultureCode(culture);
+            
+            // Only update if culture actually changed
+            if (string.Equals(_culture, normalizedCulture, StringComparison.OrdinalIgnoreCase))
+                return;
 
-        StateChanged();
+            _culture = normalizedCulture;
+
+            // Update supported cultures model
+            RefreshSupportedCulturesModel();
+
+            // Set system culture
+            var cultureInfo = CultureInfo.GetCultureInfo(culture);
+            CultureInfo.CurrentCulture = cultureInfo;
+            CultureInfo.CurrentUICulture = cultureInfo;
+
+            OnChange?.Invoke();
+        }
+        catch (Exception)
+        {
+            // Log exception in production
+            // Fallback to default culture
+            _culture = DefaultCulture;
+            RefreshSupportedCulturesModel();
+            OnChange?.Invoke();
+        }
     }
 
     public void SetTimeZone(string timeZone)
     {
-        _getTimeZone = timeZone;
+        if (string.IsNullOrWhiteSpace(timeZone))
+        {
+            timeZone = DefaultTimeZone;
+        }
 
-        StateChanged();
+        try
+        {
+            // Validate the time zone
+            TimeZoneInfo.FindSystemTimeZoneById(timeZone);
+            
+            // Only update if timezone actually changed
+            if (string.Equals(_timeZone, timeZone, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            _timeZone = timeZone;
+            OnChange?.Invoke();
+        }
+        catch (Exception)
+        {
+            // Log exception in production
+            // Fallback to default timezone
+            _timeZone = DefaultTimeZone;
+            OnChange?.Invoke();
+        }
     }
 
-    public event Action? OnChange;
-
-    public void StateChanged() 
-        => OnChange?.Invoke();
+    private void RefreshSupportedCulturesModel()
+    {
+        _supportedCulturesModel.Clear();
+        
+        foreach (var cultureCode in _supportedCultures)
+        {
+            try
+            {
+                var languageModel = languageProvider.GetByCode(cultureCode);
+                if (languageModel != null)
+                {
+                    _supportedCulturesModel.Add(languageModel);
+                }
+            }
+            catch (Exception)
+            {
+                // Log exception in production
+                // Skip this culture and continue
+            }
+        }
+    }
 }
 
 // TODO: Warto ogarnąć

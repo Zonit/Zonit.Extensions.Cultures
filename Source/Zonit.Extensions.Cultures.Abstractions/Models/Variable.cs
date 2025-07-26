@@ -15,9 +15,38 @@ public class Variable
     public Variable(string name, List<Translate> translates, string description) : this(name, translates)
         => Description = description;
 
-    //public Variable AddTranslate(Translate translate)
-    //{
-    //    Translates?.Add(translate);
-    //    return this;
-    //}
+    /// <summary>
+    /// Adds a translation to the variable
+    /// </summary>
+    /// <param name="translate">The translation to add</param>
+    public void AddTranslate(Translate translate)
+    {
+        Translates ??= new List<Translate>();
+        Translates.Add(translate);
+    }
+
+    /// <summary>
+    /// Removes a translation from the variable
+    /// </summary>
+    /// <param name="culture">The culture code of the translation to remove</param>
+    public bool RemoveTranslate(string culture)
+    {
+        if (Translates == null) return false;
+        
+        var toRemove = Translates.FirstOrDefault(t => 
+            string.Equals(t.Culture, culture, StringComparison.OrdinalIgnoreCase));
+        
+        return toRemove != null && Translates.Remove(toRemove);
+    }
+
+    /// <summary>
+    /// Gets a translation for the specified culture
+    /// </summary>
+    /// <param name="culture">The culture code</param>
+    /// <returns>The translation if found, null otherwise</returns>
+    public Translate? GetTranslate(string culture)
+    {
+        return Translates?.FirstOrDefault(t => 
+            string.Equals(t.Culture, culture, StringComparison.OrdinalIgnoreCase));
+    }
 }
