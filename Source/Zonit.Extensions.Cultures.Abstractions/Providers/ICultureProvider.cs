@@ -18,7 +18,7 @@ public interface ICultureProvider
     /// <param name="content">Search string, example: "Hello {0}"</param>
     /// <param name="args">Additional arguments, example: "User"</param>
     /// <returns></returns>
-    public Translated Translate(string content, params object?[] args);
+    public string Translate(string content, params object?[] args);
 
     /// <summary>
     /// Default time zone for the user

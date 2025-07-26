@@ -31,6 +31,9 @@ internal class Program
         // Test 5: Translated value object functionality
         TestTranslatedValueObject();
 
+        // Test 6: Missing translations recording
+        TestMissingTranslationsRecording(serviceProvider);
+
         Console.WriteLine("\n=== All tests completed ===");
         Console.WriteLine("Press any key to exit...");
         Console.ReadKey();
@@ -270,6 +273,101 @@ internal class Program
         // Test with actual translation methods
         Console.WriteLine($"✅ Value property: '{fromConstructor.Value}'");
         Console.WriteLine($"✅ ToString(): '{fromConstructor.ToString()}'");
+
+        Console.WriteLine();
+    }
+
+    static void TestMissingTranslationsRecording(ServiceProvider serviceProvider)
+    {
+        Console.WriteLine("6. Testing Missing Translations Recording...");
+
+        var cultureProvider = serviceProvider.GetService<ICultureProvider>();
+        var cultureManager = serviceProvider.GetService<ICultureManager>();
+        var missingRepo = serviceProvider.GetService<MissingTranslationRepository>();
+
+        if (cultureProvider == null || cultureManager == null || missingRepo == null)
+        {
+            Console.WriteLine("❌ Required services not registered properly");
+            return;
+        }
+
+        // Clear any existing missing translations
+        missingRepo.Clear();
+        Console.WriteLine("✅ Cleared existing missing translations");
+
+        // Test 1: Missing translation for non-default culture
+        cultureManager.SetCulture("pl-pl");
+        var missingKey1 = "missing_key_polish";
+        var result1 = cultureProvider.Translate(missingKey1);
+        
+        Console.WriteLine($"✅ Requested missing key '{missingKey1}' in pl-pl, got: '{result1}'");
+
+        // Test 2: Missing translation for another culture
+        cultureManager.SetCulture("de-de");
+        var missingKey2 = "missing_key_german";
+        var result2 = cultureProvider.Translate(missingKey2, "param1", "param2");
+        
+        Console.WriteLine($"✅ Requested missing key '{missingKey2}' in de-de with params, got: '{result2}'");
+
+        // Test 3: Same key but different culture
+        cultureManager.SetCulture("fr-fr");
+        var result3 = cultureProvider.Translate(missingKey1); // Same key as test 1
+        
+        Console.WriteLine($"✅ Requested same key '{missingKey1}' in fr-fr, got: '{result3}'");
+
+        // Test 4: Default culture (should NOT be recorded)
+        cultureManager.SetCulture("en-us");
+        var missingKey3 = "missing_key_english";
+        var result4 = cultureProvider.Translate(missingKey3);
+        
+        Console.WriteLine($"✅ Requested missing key '{missingKey3}' in en-us (default), got: '{result4}'");
+
+        // Check what was recorded
+        var missingTranslations = missingRepo.GetAll();
+        Console.WriteLine($"\n📝 Missing translations recorded: {missingTranslations.Count}");
+
+        foreach (var missing in missingTranslations)
+        {
+            Console.WriteLine($"   🔍 Key: '{missing.Name}'");
+            if (missing.Translates != null)
+            {
+                foreach (var translate in missing.Translates)
+                {
+                    Console.WriteLine($"      - Culture: '{translate.Culture}', Content: '{translate.Content}'");
+                }
+            }
+        }
+
+        // Verify expected behavior
+        var expectedKeys = new[] { missingKey1, missingKey2 }; // missingKey3 should NOT be recorded (default culture)
+        var actualKeys = missingTranslations.Select(m => m.Name).ToArray();
+
+        bool allExpectedFound = expectedKeys.All(key => actualKeys.Contains(key));
+        bool noUnexpectedFound = !actualKeys.Contains(missingKey3); // English key should not be recorded
+
+        if (allExpectedFound && noUnexpectedFound)
+        {
+            Console.WriteLine("✅ Missing translation recording works correctly!");
+            
+            // Check if multiple cultures are recorded for the same key
+            var missingKey1Record = missingTranslations.FirstOrDefault(m => m.Name == missingKey1);
+            if (missingKey1Record?.Translates?.Count >= 2)
+            {
+                Console.WriteLine("✅ Multiple cultures recorded for the same missing key!");
+            }
+        }
+        else
+        {
+            Console.WriteLine("❌ Missing translation recording has issues");
+            if (!allExpectedFound)
+            {
+                Console.WriteLine($"   Missing expected keys: {string.Join(", ", expectedKeys.Except(actualKeys))}");
+            }
+            if (!noUnexpectedFound)
+            {
+                Console.WriteLine($"   Found unexpected key: {missingKey3} (default culture should not be recorded)");
+            }
+        }
 
         Console.WriteLine();
     }

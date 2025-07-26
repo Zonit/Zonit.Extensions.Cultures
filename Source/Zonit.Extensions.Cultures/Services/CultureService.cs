@@ -79,10 +79,10 @@ public class CultureService : ICultureProvider
         return AreCulturesEqual(culture, DefaultCulture);
     }
 
-    public Translated Translate(string content, params object?[] args)
+    public string Translate(string content, params object?[] args)
     {
         if (string.IsNullOrWhiteSpace(content))
-            return Translated.Empty;
+            return string.Empty;
 
         try
         {
@@ -91,8 +91,7 @@ public class CultureService : ICultureProvider
 
             if (translation != null)
             {
-                var translatedText = FormatTranslation(translation.Content, args);
-                return new Translated(translatedText);
+                return FormatTranslation(translation.Content, args);
             }
 
             // Fallback to default culture if not found
@@ -101,8 +100,7 @@ public class CultureService : ICultureProvider
                 var defaultTranslation = FindTranslation(content, DefaultCulture);
                 if (defaultTranslation != null)
                 {
-                    var translatedText = FormatTranslation(defaultTranslation.Content, args);
-                    return new Translated(translatedText);
+                    return FormatTranslation(defaultTranslation.Content, args);
                 }
             }
 
@@ -110,14 +108,12 @@ public class CultureService : ICultureProvider
             RecordMissingTranslation(content, currentCulture);
 
             // Return original content as fallback
-            var fallbackText = FormatTranslation(content, args);
-            return new Translated(fallbackText);
+            return FormatTranslation(content, args);
         }
         catch (Exception)
         {
             // Log exception in production, for now return fallback
-            var fallbackText = FormatTranslation(content, args);
-            return new Translated(fallbackText);
+            return FormatTranslation(content, args);
         }
     }
 
