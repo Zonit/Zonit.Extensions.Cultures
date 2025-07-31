@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Zonit.Extensions.Cultures.Models;
 using Zonit.Extensions.Cultures.Repositories;
 
@@ -11,10 +12,20 @@ internal class Program
         Console.WriteLine("=== Zonit.Extensions.Cultures Test Suite ===");
         Console.WriteLine();
 
-        // Setup service provider
-        var serviceProvider = new ServiceCollection()
-            .AddCulturesExtension()
-            .BuildServiceProvider();
+
+        // 1. Zbuduj konfigurację
+        var configuration = new ConfigurationBuilder()
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+            .Build();
+
+        // 2. Zarejestruj wszystko w kolekcji
+        var services = new ServiceCollection();
+        services.AddSingleton<IConfiguration>(configuration); // najpierw konfiguracja
+        services.AddCulturesExtension(o => {
+            o.SupportedCultures = ["pl-pl", "en-us"];
+        }); // potem Twoje rozszerzenie
+        var serviceProvider = services.BuildServiceProvider();
+
 
         // Test 1: Basic Culture Manager functionality
         TestCultureManager(serviceProvider);

@@ -1,35 +1,17 @@
 ﻿using System.Globalization;
+using Microsoft.Extensions.Options;
+using Zonit.Extensions.Cultures.Options;
 
 namespace Zonit.Extensions.Cultures.Repositories;
 
-internal class CultureRepository(ILanguageProvider languageProvider) : ICultureManager
+internal class CultureRepository : ICultureManager
 {
-    private const string DefaultCulture = "en-us";
-    private const string DefaultTimeZone = "Europe/Warsaw";
+    private readonly ILanguageProvider languageProvider;
+    private readonly CultureOption _cultureOptions;
     
-    private string _culture = DefaultCulture;
-    private string _timeZone = DefaultTimeZone;
+    private string _culture;
+    private string _timeZone;
     
-    private readonly string[] _supportedCultures = [
-        "en-us",
-        "ar-sa",
-        "fr-fr",
-        "de-de",
-        "es-es",
-        "it-it",
-        "nl-nl",
-        "sv-se",
-        "da-dk",
-        "no-no",
-        "fi-fi",
-        "ru-ru",
-        "pl-pl",
-        "cs-cz",
-        "hu-hu",
-        "sk-sk",
-        "pt-pt"
-    ];
-
     private List<LanguageModel> _supportedCulturesModel = [];
 
     public string GetCulture => _culture;
@@ -37,10 +19,21 @@ internal class CultureRepository(ILanguageProvider languageProvider) : ICultureM
     public LanguageModel[] SupportedCultures => _supportedCulturesModel.ToArray();
     public event Action? OnChange;
 
+    public CultureRepository(ILanguageProvider languageProvider, IOptions<CultureOption> options)
+    {
+        this.languageProvider = languageProvider;
+        _cultureOptions = options.Value;
+        
+        _culture = NormalizeCultureCode(_cultureOptions.DefaultCulture);
+        _timeZone = _cultureOptions.DefaultTimeZone;
+        
+        InitializeSupportedCultures();
+    }
+
     private static string NormalizeCultureCode(string culture)
     {
         if (string.IsNullOrWhiteSpace(culture))
-            return DefaultCulture;
+            return "en-us";
 
         try
         {
@@ -49,7 +42,7 @@ internal class CultureRepository(ILanguageProvider languageProvider) : ICultureM
         }
         catch (CultureNotFoundException)
         {
-            return DefaultCulture;
+            return "en-us";
         }
     }
 
@@ -57,12 +50,18 @@ internal class CultureRepository(ILanguageProvider languageProvider) : ICultureM
     {
         if (string.IsNullOrWhiteSpace(culture))
         {
-            culture = DefaultCulture;
+            culture = _cultureOptions.DefaultCulture;
         }
 
         try
         {
             var normalizedCulture = NormalizeCultureCode(culture);
+            
+            // Check if culture is supported
+            if (!_cultureOptions.SupportedCultures.Contains(normalizedCulture, StringComparer.OrdinalIgnoreCase))
+            {
+                normalizedCulture = NormalizeCultureCode(_cultureOptions.DefaultCulture);
+            }
             
             // Only update if culture actually changed
             if (string.Equals(_culture, normalizedCulture, StringComparison.OrdinalIgnoreCase))
@@ -70,11 +69,8 @@ internal class CultureRepository(ILanguageProvider languageProvider) : ICultureM
 
             _culture = normalizedCulture;
 
-            // Update supported cultures model
-            RefreshSupportedCulturesModel();
-
             // Set system culture
-            var cultureInfo = CultureInfo.GetCultureInfo(culture);
+            var cultureInfo = CultureInfo.GetCultureInfo(_culture);
             CultureInfo.CurrentCulture = cultureInfo;
             CultureInfo.CurrentUICulture = cultureInfo;
 
@@ -84,8 +80,7 @@ internal class CultureRepository(ILanguageProvider languageProvider) : ICultureM
         {
             // Log exception in production
             // Fallback to default culture
-            _culture = DefaultCulture;
-            RefreshSupportedCulturesModel();
+            _culture = NormalizeCultureCode(_cultureOptions.DefaultCulture);
             OnChange?.Invoke();
         }
     }
@@ -94,7 +89,7 @@ internal class CultureRepository(ILanguageProvider languageProvider) : ICultureM
     {
         if (string.IsNullOrWhiteSpace(timeZone))
         {
-            timeZone = DefaultTimeZone;
+            timeZone = _cultureOptions.DefaultTimeZone;
         }
 
         try
@@ -113,16 +108,16 @@ internal class CultureRepository(ILanguageProvider languageProvider) : ICultureM
         {
             // Log exception in production
             // Fallback to default timezone
-            _timeZone = DefaultTimeZone;
+            _timeZone = _cultureOptions.DefaultTimeZone;
             OnChange?.Invoke();
         }
     }
 
-    private void RefreshSupportedCulturesModel()
+    private void InitializeSupportedCultures()
     {
         _supportedCulturesModel.Clear();
         
-        foreach (var cultureCode in _supportedCultures)
+        foreach (var cultureCode in _cultureOptions.SupportedCultures)
         {
             try
             {

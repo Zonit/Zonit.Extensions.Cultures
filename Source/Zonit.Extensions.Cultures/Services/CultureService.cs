@@ -13,7 +13,7 @@ public class CultureService : ICultureProvider
     private readonly MissingTranslationRepository _missingTranslationRepository;
     private readonly ICultureManager _cultureManager;
 
-    private DateTimeFormatModel _dateTimeFormat;
+    private DateTimeFormatModel _dateTimeFormat = new();
 
     public CultureService(
         TranslationRepository translationRepository,

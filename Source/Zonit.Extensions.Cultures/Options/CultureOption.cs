@@ -1,4 +1,4 @@
-﻿namespace Zonit.Extensions.Cultures.Abstractions.Options;
+﻿namespace Zonit.Extensions.Cultures.Options;
 
 public class CultureOption
 {

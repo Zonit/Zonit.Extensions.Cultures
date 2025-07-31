@@ -1,7 +1,7 @@
 ﻿using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using System.Globalization;
-using Zonit.Extensions.Cultures.Abstractions.Options;
+using Zonit.Extensions.Cultures.Options;
 using Zonit.Extensions.Cultures.Services;
 
 namespace Zonit.Extensions.Cultures.Middlewares;

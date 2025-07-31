@@ -1,6 +1,6 @@
 ﻿using Microsoft.Extensions.Options;
 using System.Text.RegularExpressions;
-using Zonit.Extensions.Cultures.Abstractions.Options;
+using Zonit.Extensions.Cultures.Options;
 
 namespace Zonit.Extensions.Cultures.Services;
 
@@ -10,9 +10,9 @@ internal partial class DetectCultureService(IOptions<CultureOption> options)
 
     public record PathCulture(string Url, string Culture);
 
-    public PathCulture? GetUrl(string adress)
+    public PathCulture? GetUrl(string adres)
     {
-        var match = GetUrlRegex().Match(adress);
+        var match = GetUrlRegex().Match(adres);
 
         //if(match.Success)
         //    return new PathCulture(match.Groups["url"].Value, match.Groups["culture"].Value.ToLower());
