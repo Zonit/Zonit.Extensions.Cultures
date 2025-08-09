@@ -7,8 +7,10 @@ namespace Zonit.Extensions.Cultures.Services;
 
 public class CultureService : ICultureProvider
 {
+    public const string NoVariableMessage = "no variable";
+
     private const string DefaultCulture = "en-us";
-    
+
     private readonly TranslationRepository _translationRepository;
     private readonly MissingTranslationRepository _missingTranslationRepository;
     private readonly ICultureManager _cultureManager;
@@ -173,7 +175,7 @@ public class CultureService : ICultureProvider
                 var newTranslate = new Translate 
                 { 
                     Content = string.Empty, 
-                    Culture = culture 
+                    Culture = NoVariableMessage
                 };
                 var missingVariable = new Variable(content, new List<Translate> { newTranslate });
                 
