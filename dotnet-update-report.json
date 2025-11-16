@@ -1,0 +1,39 @@
+{
+  "PackagesFound": 1,
+  "Summary": {
+    "PackagesConfigured": 1,
+    "FrameworksSet": "net8.0;net9.0;net10.0",
+    "FrameworkSpecificGroups": 3,
+    "PackagesChanged": 3,
+    "DirectoryPackagesPropsUpdated": true,
+    "ProjectsUpdated": 3
+  },
+  "TargetFrameworks": [
+    "net8.0",
+    "net9.0",
+    "net10.0"
+  ],
+  "ProjectsFound": 3,
+  "Timestamp": "2025-11-16 16:47:03",
+  "PackageChanges": [
+    {
+      "Package": "Microsoft.Extensions.DependencyInjection.Abstractions",
+      "Framework": "net8.0",
+      "OldVersion": "8.0.2",
+      "NewVersion": "10.0.0"
+    },
+    {
+      "Package": "Microsoft.Extensions.DependencyInjection.Abstractions",
+      "Framework": "net9.0",
+      "OldVersion": "9.0.1",
+      "NewVersion": "10.0.0"
+    },
+    {
+      "Package": "Microsoft.Extensions.DependencyInjection.Abstractions",
+      "Framework": "net10.0",
+      "OldVersion": "(new)",
+      "NewVersion": "10.0.0"
+    }
+  ],
+  "ChangeSummaryText": "Microsoft.Extensions.DependencyInjection.Abstractions [net10.0]: (new) -> 10.0.0\nMicrosoft.Extensions.DependencyInjection.Abstractions [net8.0]: 8.0.2 -> 10.0.0\nMicrosoft.Extensions.DependencyInjection.Abstractions [net9.0]: 9.0.1 -> 10.0.0"
+}
