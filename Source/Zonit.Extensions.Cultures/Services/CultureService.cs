@@ -7,7 +7,7 @@ namespace Zonit.Extensions.Cultures.Services;
 
 public class CultureService : ICultureProvider
 {
-    public const string NoVariableMessage = "no variable";
+    private const string NoVariableMessage = "no variable";
 
     private const string DefaultCulture = "en-us";
 
