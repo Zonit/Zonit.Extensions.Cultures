@@ -1,33 +1,20 @@
 {
   "ProjectsFound": 3,
-  "ChangeSummaryText": "Microsoft.Extensions.DependencyInjection.Abstractions [net10.0]: (new) -> 10.0.0\nMicrosoft.Extensions.DependencyInjection.Abstractions [net9.0]: 9.0.1 -> 9.0.11",
-  "Summary": {
-    "PackagesChanged": 2,
-    "FrameworksSet": "net8.0;net9.0;net10.0",
-    "FrameworkSpecificGroups": 3,
-    "DirectoryPackagesPropsUpdated": true,
-    "PackagesConfigured": 1,
-    "ProjectsUpdated": 3
-  },
+  "PackagesFound": 1,
   "TargetFrameworks": [
     "net8.0",
     "net9.0",
     "net10.0"
   ],
-  "PackagesFound": 1,
-  "Timestamp": "2025-11-17 02:09:30",
-  "PackageChanges": [
-    {
-      "Package": "Microsoft.Extensions.DependencyInjection.Abstractions",
-      "Framework": "net9.0",
-      "OldVersion": "9.0.1",
-      "NewVersion": "9.0.11"
-    },
-    {
-      "Package": "Microsoft.Extensions.DependencyInjection.Abstractions",
-      "Framework": "net10.0",
-      "OldVersion": "(new)",
-      "NewVersion": "10.0.0"
-    }
-  ]
+  "ChangeSummaryText": "No package version changes - this might be a new setup or no updates available",
+  "Summary": {
+    "ProjectsUpdated": 3,
+    "PackagesChanged": 0,
+    "PackagesConfigured": 1,
+    "FrameworkSpecificGroups": 3,
+    "FrameworksSet": "net8.0;net9.0;net10.0",
+    "DirectoryPackagesPropsUpdated": true
+  },
+  "Timestamp": "2025-11-17 02:40:53",
+  "PackageChanges": []
 }
