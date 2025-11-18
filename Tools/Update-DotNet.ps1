@@ -15,6 +15,7 @@ This script:
    - For other packages: gets latest compatible version
 8. Checks for duplicates: if package version is identical across all frameworks, moves it to common ItemGroup
 9. Preserves additional attributes (PrivateAssets, etc.) and child elements
+10. EXCEPTION: Preserves packages with PrivateAssets from existing Directory.Packages.props even if not in .csproj
 
 .PARAMETER TargetFrameworks
 List of target frameworks to support (e.g., "net8.0", "net9.0", "net10.0")
@@ -99,6 +100,30 @@ function Test-RequiresPrerelease {
 }
 
 # ============================================================================
+# FUNCTION: Validate version is full semantic version
+# ============================================================================
+function Test-IsValidFullVersion {
+    param([string]$Version)
+    
+    if (-not $Version -or $Version -eq "0") {
+        return $false
+    }
+    
+    # Reject major-only (e.g., "4", "8") - MUST have at least Major.Minor.Patch
+    if ($Version -match '^\d+$') {
+        return $false
+    }
+    
+    # Try to parse as version
+    try {
+        $null = [version]($Version -replace '-.*', '')
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+# ============================================================================
 # FUNCTION: Get best package version for target framework
 # ============================================================================
 function Get-BestPackageVersion {
@@ -130,8 +155,8 @@ function Get-BestPackageVersion {
         $allVersions = $versions | ForEach-Object {
             try {
                 # CRITICAL: Reject major-only versions (e.g., "4" -> reject, "4.0.0" -> OK)
-                if ($_ -match '^\d+$') {
-                    Write-Verbose "Rejecting major-only version: $_"
+                if (-not (Test-IsValidFullVersion $_)) {
+                    Write-Verbose "Rejecting invalid version: $_"
                     return $null
                 }
                 
@@ -203,10 +228,10 @@ function Get-BestPackageVersion {
             return $null
         }
         
-        # CRITICAL: Double-check we're not returning major-only version
+        # CRITICAL: Final validation - ensure we return full semantic version
         $resultVersion = $best.OriginalString
-        if ($resultVersion -match '^\d+$') {
-            Write-Warning "CRITICAL: Rejecting major-only version '$resultVersion' for ${PackageId} - this would break compilation"
+        if (-not (Test-IsValidFullVersion $resultVersion)) {
+            Write-Warning "CRITICAL: Rejecting invalid version '$resultVersion' for ${PackageId} - would break compilation"
             return $null
         }
         
@@ -220,7 +245,7 @@ function Get-BestPackageVersion {
 # ============================================================================
 # STEP 1: Update TargetFrameworks in .csproj
 # ============================================================================
-Write-Host "`n[1/5] Updating TargetFrameworks in .csproj files..." -ForegroundColor Yellow
+Write-Host "`n[1/6] Updating TargetFrameworks in .csproj files..." -ForegroundColor Yellow
 
 # Use singular or plural based on count
 $targetFrameworksString = $TargetFrameworks -join ';'
@@ -282,9 +307,93 @@ foreach ($proj in $csprojs) {
 }
 
 # ============================================================================
-# STEP 2: Collect all packages with their metadata
+# STEP 2: Find Directory.Packages.props and collect packages with PrivateAssets
 # ============================================================================
-Write-Host "`n[2/5] Collecting package references from all .csproj files..." -ForegroundColor Yellow
+Write-Host "`n[2/6] Checking existing Directory.Packages.props for PrivateAssets packages..." -ForegroundColor Yellow
+
+$propsFile = $null
+$searchPaths = @("Source", ".")
+$privateAssetPackages = @{}  # packageId -> @{ Version, Attributes, ChildElements }
+
+foreach ($searchPath in $searchPaths) {
+    if (Test-Path $searchPath) {
+        $found = Get-ChildItem -Path $searchPath -Filter "Directory.Packages.props" -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($found) {
+            $propsFile = $found
+            Write-Host "  Found existing Directory.Packages.props in: $searchPath" -ForegroundColor Cyan
+            break
+        }
+    }
+}
+
+if ($propsFile) {
+    try {
+        [xml]$existingXml = Get-Content $propsFile.FullName
+        $existingItemGroups = @($existingXml.Project.ItemGroup)
+        
+        foreach ($ig in $existingItemGroups) {
+            foreach ($pv in $ig.PackageVersion) {
+                if ($pv.Include) {
+                    $packageId = $pv.Include
+                    $hasPrivateAssets = $false
+                    
+                    # Check if has PrivateAssets attribute
+                    if ($pv.PrivateAssets) {
+                        $hasPrivateAssets = $true
+                    }
+                    
+                    # Check if has PrivateAssets child element
+                    foreach ($child in $pv.ChildNodes) {
+                        if ($child.NodeType -eq 'Element' -and $child.LocalName -eq 'PrivateAssets') {
+                            $hasPrivateAssets = $true
+                            break
+                        }
+                    }
+                    
+                    if ($hasPrivateAssets) {
+                        # Store this package for preservation
+                        $attrs = @{}
+                        foreach ($attr in $pv.Attributes) {
+                            if ($attr.Name -notin @('Include', 'Version')) {
+                                $attrs[$attr.Name] = $attr.Value
+                            }
+                        }
+                        
+                        $childElements = @()
+                        foreach ($child in $pv.ChildNodes) {
+                            if ($child.NodeType -eq 'Element') {
+                                $childElements += [PSCustomObject]@{
+                                    Name = $child.LocalName
+                                    Value = $child.InnerText
+                                }
+                            }
+                        }
+                        
+                        $privateAssetPackages[$packageId] = @{
+                            Version = $pv.Version
+                            Attributes = $attrs
+                            ChildElements = $childElements
+                            Framework = if ($ig.Condition -and $ig.Condition -match "'\\`$\(TargetFramework\)' == '(net\d+\.\d+)'") { $matches[1] } else { $null }
+                        }
+                        
+                        Write-Host "  [PRESERVE] $packageId (has PrivateAssets)" -ForegroundColor Magenta
+                    }
+                }
+            }
+        }
+        
+        if ($privateAssetPackages.Count -gt 0) {
+            Write-Host "  Found $($privateAssetPackages.Count) packages with PrivateAssets to preserve" -ForegroundColor Cyan
+        }
+    } catch {
+        Write-Warning "Could not analyze existing Directory.Packages.props for PrivateAssets"
+    }
+}
+
+# ============================================================================
+# STEP 3: Collect all packages with their metadata from .csproj
+# ============================================================================
+Write-Host "`n[3/6] Collecting package references from all .csproj files..." -ForegroundColor Yellow
 
 # Structure: packageId -> @{ Attributes, ChildElements }
 $allPackagesMetadata = @{}
@@ -347,9 +456,9 @@ foreach ($pkg in $packageList) {
 }
 
 # ============================================================================
-# STEP 3: Remove Version from PackageReference in .csproj
+# STEP 4: Remove Version from PackageReference in .csproj
 # ============================================================================
-Write-Host "`n[3/5] Removing Version attributes from PackageReference in .csproj files..." -ForegroundColor Yellow
+Write-Host "`n[4/6] Removing Version attributes from PackageReference in .csproj files..." -ForegroundColor Yellow
 
 foreach ($proj in $csprojs) {
     try {
@@ -363,27 +472,61 @@ foreach ($proj in $csprojs) {
 }
 
 # ============================================================================
-# STEP 4: Resolve package versions for each framework
+# STEP 5: Resolve package versions for each framework
 # ============================================================================
-Write-Host "`n[4/5] Resolving package versions for each framework..." -ForegroundColor Yellow
+Write-Host "`n[5/6] Resolving package versions for each framework..." -ForegroundColor Yellow
+
+# Merge package lists: packages from .csproj + packages with PrivateAssets
+# FIX: Use empty constructor and Add() method for compatibility
+$allPackagesToResolve = [System.Collections.Generic.HashSet[string]]::new()
+foreach ($pkg in $packageList) {
+    $null = $allPackagesToResolve.Add($pkg)
+}
+foreach ($pkg in $privateAssetPackages.Keys) {
+    $null = $allPackagesToResolve.Add($pkg)
+}
 
 # Structure: framework -> packageId -> version
-$packageVersionsByFramework = @{
-}
-$unresolvedPackages = @{
-}
+$packageVersionsByFramework = @{}
+$unresolvedPackages = @{}
 
 foreach ($tf in $TargetFrameworks) {
     # Auto-detect if framework requires prerelease packages
     $allowPrereleaseForFramework = Test-RequiresPrerelease -TargetFramework $tf
     
-    $packageVersionsByFramework[$tf] = @{
-    }
+    $packageVersionsByFramework[$tf] = @{}
     
     Write-Host "  Resolving versions for $tf..." -ForegroundColor Cyan
     
-    foreach ($packageId in $packageList) {
-        # Fetch best compatible version from NuGet based on framework requirements
+    foreach ($packageId in $allPackagesToResolve) {
+        # Check if this is a PrivateAssets package and already has a version
+        if ($privateAssetPackages.ContainsKey($packageId)) {
+            $privateAssetInfo = $privateAssetPackages[$packageId]
+            
+            # If it's framework-specific and matches current framework, use existing version
+            if ($privateAssetInfo.Framework -and $privateAssetInfo.Framework -eq $tf) {
+                $existingVersion = $privateAssetInfo.Version
+                if (Test-IsValidFullVersion $existingVersion) {
+                    $packageVersionsByFramework[$tf][$packageId] = $existingVersion
+                    Write-Host "    [$tf] $packageId -> $existingVersion (preserved PrivateAssets)" -ForegroundColor Magenta
+                    Start-Sleep -Milliseconds 50
+                    continue
+                }
+            }
+            
+            # If it's common (no framework condition) and has valid version
+            if (-not $privateAssetInfo.Framework) {
+                $existingVersion = $privateAssetInfo.Version
+                if (Test-IsValidFullVersion $existingVersion) {
+                    $packageVersionsByFramework[$tf][$packageId] = $existingVersion
+                    Write-Host "    [$tf] $packageId -> $existingVersion (preserved PrivateAssets)" -ForegroundColor Magenta
+                    Start-Sleep -Milliseconds 50
+                    continue
+                }
+            }
+        }
+        
+        # Fetch best compatible version from NuGet
         $version = Get-BestPackageVersion -PackageId $packageId -TargetFramework $tf -AllowPrerelease $allowPrereleaseForFramework
         
         if ($version) {
@@ -413,34 +556,17 @@ if ($unresolvedPackages.Count -gt 0) {
 }
 
 # ============================================================================
-# STEP 5: Create/Update Directory.Packages.props
+# STEP 6: Create/Update Directory.Packages.props
 # ============================================================================
-Write-Host "`n[5/5] Creating/Updating Directory.Packages.props..." -ForegroundColor Yellow
+Write-Host "`n[6/6] Creating/Updating Directory.Packages.props..." -ForegroundColor Yellow
 
-# CRITICAL FIX: Look for Directory.Packages.props in Source/ directory (Zonit convention)
-$propsFile = $null
-$searchPaths = @("Source", ".")
-
-foreach ($searchPath in $searchPaths) {
-    if (Test-Path $searchPath) {
-        $found = Get-ChildItem -Path $searchPath -Filter "Directory.Packages.props" -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($found) {
-            $propsFile = $found
-            Write-Host "  Found existing Directory.Packages.props in: $searchPath" -ForegroundColor Cyan
-            break
-        }
-    }
-}
-
-$oldVersions = @{
-
-}
+$oldVersions = @{}
 
 if (-not $propsFile) {
     # Create in Source/ directory if it exists, otherwise in root
     $propsPath = if (Test-Path "Source") { "Source\Directory.Packages.props" } else { "Directory.Packages.props" }
     
-    # CRITICAL FIX: No XML declaration - MSBuild doesn't need it
+    # No XML declaration - MSBuild doesn't need it
     @"
 <Project>
   <PropertyGroup>
@@ -510,7 +636,7 @@ try {
     $commonPackages = @{}           # Packages with same version across ALL frameworks
     $frameworkSpecificPackages = @{} # Packages with different versions per framework
     
-    foreach ($packageId in $packageList) {
+    foreach ($packageId in $allPackagesToResolve) {
         $versions = @()
         $allResolved = $true
         
@@ -527,13 +653,19 @@ try {
         $uniqueVersions = $versions | Select-Object -Unique
         
         if ($allResolved -and $uniqueVersions.Count -eq 1 -and $uniqueVersions[0]) {
-            # ALL frameworks use the SAME version -> move to common ItemGroup
-            $commonPackages[$packageId] = $uniqueVersions[0]
-            Write-Host "    [COMMON] $packageId -> $($uniqueVersions[0]) (same across all frameworks)" -ForegroundColor Green
+            # Validate version before adding to common
+            if (Test-IsValidFullVersion $uniqueVersions[0]) {
+                $commonPackages[$packageId] = $uniqueVersions[0]
+                $preservedLabel = if ($privateAssetPackages.ContainsKey($packageId)) { " [PrivateAssets preserved]" } else { "" }
+                Write-Host "    [COMMON] $packageId -> $($uniqueVersions[0]) (same across all frameworks)$preservedLabel" -ForegroundColor Green
+            } else {
+                Write-Warning "    [SKIP] $packageId - invalid version: $($uniqueVersions[0])"
+            }
         } elseif ($uniqueVersions.Count -gt 1) {
             # Different versions per framework -> keep in framework-specific groups
             $frameworkSpecificPackages[$packageId] = $true
-            Write-Host "    [SPECIFIC] $packageId (different versions per framework)" -ForegroundColor Yellow
+            $preservedLabel = if ($privateAssetPackages.ContainsKey($packageId)) { " [PrivateAssets preserved]" } else { "" }
+            Write-Host "    [SPECIFIC] $packageId (different versions per framework)$preservedLabel" -ForegroundColor Yellow
         } elseif (-not $allResolved) {
             # Not resolved for all frameworks -> skip
             Write-Warning "    [SKIP] $packageId - not resolved for all frameworks"
@@ -543,6 +675,9 @@ try {
     Write-Host "`n  Package distribution:" -ForegroundColor Cyan
     Write-Host "    Common packages: $($commonPackages.Count)" -ForegroundColor Green
     Write-Host "    Framework-specific packages: $($frameworkSpecificPackages.Count)" -ForegroundColor Yellow
+    if ($privateAssetPackages.Count -gt 0) {
+        Write-Host "    Preserved PrivateAssets packages: $($privateAssetPackages.Count)" -ForegroundColor Magenta
+    }
     
     # ====================================================================================
     # Create COMMON ItemGroup (for packages with same version across all frameworks)
@@ -554,8 +689,8 @@ try {
         foreach ($packageId in ($commonPackages.Keys | Sort-Object)) {
             $version = $commonPackages[$packageId]
             
-            # CRITICAL: Skip if version is invalid (null, "0", or major-only like "4")
-            if (-not $version -or $version -eq "0" -or $version -match '^\d+$') {
+            # CRITICAL: Final validation before writing to XML
+            if (-not (Test-IsValidFullVersion $version)) {
                 Write-Warning "    [SKIP] $packageId - invalid version: $version (would break compilation)"
                 continue
             }
@@ -564,8 +699,14 @@ try {
             $pkgVersion.SetAttribute("Include", $packageId)
             $pkgVersion.SetAttribute("Version", $version)
             
-            # Restore metadata (attributes and child elements)
-            $metadata = $allPackagesMetadata[$packageId]
+            # Restore metadata - prefer .csproj metadata, fallback to PrivateAssets metadata
+            if ($allPackagesMetadata.ContainsKey($packageId)) {
+                $metadata = $allPackagesMetadata[$packageId]
+            } elseif ($privateAssetPackages.ContainsKey($packageId)) {
+                $metadata = $privateAssetPackages[$packageId]
+            } else {
+                $metadata = @{ Attributes = @{}; ChildElements = @() }
+            }
             
             # Restore attributes
             foreach ($attrName in $metadata.Attributes.Keys) {
@@ -604,8 +745,8 @@ try {
                 if ($packageVersionsByFramework[$tf].ContainsKey($packageId)) {
                     $version = $packageVersionsByFramework[$tf][$packageId]
                     
-                    # CRITICAL: Skip if version is invalid (null, "0", or major-only like "4")
-                    if (-not $version -or $version -eq "0" -or $version -match '^\d+$') {
+                    # CRITICAL: Final validation before writing to XML
+                    if (-not (Test-IsValidFullVersion $version)) {
                         Write-Warning "    [$tf] [SKIP] $packageId - invalid version: $version (would break compilation)"
                         continue
                     }
@@ -614,8 +755,14 @@ try {
                     $pkgVersion.SetAttribute("Include", $packageId)
                     $pkgVersion.SetAttribute("Version", $version)
                     
-                    # Restore metadata (attributes and child elements)
-                    $metadata = $allPackagesMetadata[$packageId]
+                    # Restore metadata - prefer .csproj metadata, fallback to PrivateAssets metadata
+                    if ($allPackagesMetadata.ContainsKey($packageId)) {
+                        $metadata = $allPackagesMetadata[$packageId]
+                    } elseif ($privateAssetPackages.ContainsKey($packageId)) {
+                        $metadata = $privateAssetPackages[$packageId]
+                    } else {
+                        $metadata = @{ Attributes = @{}; ChildElements = @() }
+                    }
                     
                     # Restore attributes
                     foreach ($attrName in $metadata.Attributes.Keys) {
@@ -662,7 +809,7 @@ Write-Host "========================================" -ForegroundColor Green
 # Track changes
 $packageChanges = @()
 
-foreach ($packageId in $packageList) {
+foreach ($packageId in $allPackagesToResolve) {
     # Check if in common or framework-specific
     if ($commonPackages.ContainsKey($packageId)) {
         $newVersion = $commonPackages[$packageId]
@@ -738,15 +885,16 @@ $report = @{
     Timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
     TargetFrameworks = $TargetFrameworks
     ProjectsFound = $csprojs.Count
-    PackagesFound = $packageList.Count
+    PackagesFound = $allPackagesToResolve.Count
     PackageChanges = $packageChanges
     ChangeSummaryText = $changeSummaryText
     Summary = @{
         ProjectsUpdated = $csprojs.Count
-        PackagesConfigured = $packageList.Count
+        PackagesConfigured = $allPackagesToResolve.Count
         PackagesChanged = $packageChanges.Count
         CommonPackages = $commonPackages.Count
         FrameworkSpecificPackages = $frameworkSpecificPackages.Count
+        PreservedPrivateAssets = $privateAssetPackages.Count
         FrameworksSet = $targetFrameworksString
         DirectoryPackagesPropsUpdated = [bool]$propsFile
     }
@@ -759,9 +907,12 @@ Write-Host "`nReport saved to: $reportPath" -ForegroundColor Gray
 Write-Host "`nSummary:" -ForegroundColor Cyan
 Write-Host "  Projects updated: $($csprojs.Count)" -ForegroundColor White
 Write-Host "  Target frameworks: $targetFrameworksString" -ForegroundColor White
-Write-Host "  Total packages: $($packageList.Count)" -ForegroundColor White
+Write-Host "  Total packages: $($allPackagesToResolve.Count)" -ForegroundColor White
 Write-Host "    - Common packages: $($commonPackages.Count)" -ForegroundColor Green
 Write-Host "    - Framework-specific packages: $($frameworkSpecificPackages.Count)" -ForegroundColor Yellow
+if ($privateAssetPackages.Count -gt 0) {
+    Write-Host "    - Preserved PrivateAssets packages: $($privateAssetPackages.Count)" -ForegroundColor Magenta
+}
 Write-Host "  Package versions changed: $($packageChanges.Count)" -ForegroundColor White
 
 Write-Host "`nNext steps:" -ForegroundColor Cyan
