@@ -1,5 +1,4 @@
-﻿
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.11.34909.67
 MinimumVisualStudioVersion = 10.0.40219.1
@@ -18,6 +17,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Elementy rozwiązania", "El
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Zonit.Extensions.Cultures.Tests", "Source\Zonit.Extensions.Cultures.Tests\Zonit.Extensions.Cultures.Tests.csproj", "{7526C421-4E9F-47F2-A038-54F2FD041EAB}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".github", ".github", "{A1B2C3D4-E5F6-4A5B-9C8D-7E6F5A4B3C2D}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "workflows", "workflows", "{B2C3D4E5-F6A7-4B5C-9D8E-7F6A5B4C3D2E}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\PublishNuGet.yml = .github\workflows\PublishNuGet.yml
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -45,6 +51,7 @@ Global
 		{50A83F88-474B-478D-B38A-AAEA797C2A5B} = {009EB075-B69B-405C-BBF2-F1D25CCC4393}
 		{79B4300A-56CE-402E-A063-9ADDEC806857} = {009EB075-B69B-405C-BBF2-F1D25CCC4393}
 		{7526C421-4E9F-47F2-A038-54F2FD041EAB} = {009EB075-B69B-405C-BBF2-F1D25CCC4393}
+		{B2C3D4E5-F6A7-4B5C-9D8E-7F6A5B4C3D2E} = {A1B2C3D4-E5F6-4A5B-9C8D-7E6F5A4B3C2D}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {0A5EA7EB-3411-4368-946A-85F2FFD3D6D4}
